@@ -8,7 +8,7 @@ library(lme4)
 # Get rid of scientific notation
 options(scipen = 8)
 
-# defaults used in R)
+# Themes to make things look good.
 theme_old <- theme_get() # Allows you to go back to default theme
 theme_new <- theme_old +
   theme(axis.line = element_line(linetype = "solid"), 
@@ -24,34 +24,41 @@ theme_new <- theme_old +
         plot.background = element_rect(colour = NA))
 theme_set(theme_new)
 
-
+# Load data
 soil_is_data <- read_xlsx("./SOIL IS DATA.xlsx") %>%
   rename("plot_rep" = 1,
          "notes" = 6) %>%
-  separate(plot_rep, into = c("cover", "field_rep", "lab_rep"), sep = " ")
+  separate(plot_rep, 
+           into = c("cover", "field_rep", "lab_rep"), 
+           sep = " ")
 
+# Split data to look at differences in total number
 soil_is_data_total <- soil_is_data %>%
   select(-Small, -Medium, -Large, -notes)
 
+# Split data to look at differences by size
 soil_is_data_size <- soil_is_data %>%
   select(-TOTAL, -notes) %>%
   pivot_longer(cols = c("Small", "Medium", "Large"), 
                names_to = "worm_size", 
                values_to = "count") %>%
-  mutate(worm_size = ordered(worm_size, levels = c("Small", "Medium", "Large"))) 
+  mutate(worm_size = ordered(worm_size, 
+                             levels = c("Small", "Medium", "Large"))) 
 
-
+# Model total
 total_glmer <- glmer(TOTAL ~ cover + (1|lab_rep), 
                      family = poisson(link = log), 
                      soil_is_data_total)
 
 Anova(total_glmer)
 
+# Model by size
 size_glmer <- glmer(count ~ cover*worm_size + (1|lab_rep), 
                      family = poisson(link = log), 
                      soil_is_data_size)
 
 Anova(size_glmer)
+
 
 size_emm <- emmeans(size_glmer, ~ cover:worm_size, type = "response")
 
@@ -60,12 +67,11 @@ size_cld <- cld(size_emm,
                 level = 0.95, 
                 alpha = 0.10,
                 Letters = letters)
-cld(size_emm, by = "cover", level = 0.95, Letters = letters)
 
 worm_pairs <-  as.data.frame(summary(pairs(size_emm, by = "worm_size"))) %>%
   mutate(p.value = round(p.value, digits = 4))
 
-
+# Plot it
 (worm_graph <-
   ggplot(as.data.frame(size_emm), aes(x = worm_size, y = rate, color = cover)) +
   geom_point(position = position_dodge(width = 0.5)) +
@@ -83,4 +89,5 @@ worm_pairs <-  as.data.frame(summary(pairs(size_emm, by = "worm_size"))) %>%
   scale_y_continuous(limits = c(0, 170))
 )
 
+# Save it
 cowplot::save_plot("worm_graph.png", worm_graph, base_height = 5, base_width = 8)
