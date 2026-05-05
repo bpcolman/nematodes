@@ -5,6 +5,9 @@ library(emmeans)
 library(readxl)           # Reads in xls like a champ
 library(lme4)
 
+# Get rid of scientific notation
+options(scipen = 8)
+
 # defaults used in R)
 theme_old <- theme_get() # Allows you to go back to default theme
 theme_new <- theme_old +
@@ -12,10 +15,12 @@ theme_new <- theme_old +
         axis.ticks = element_line(colour = "black", size = 1), 
         panel.grid.major = element_line(colour = NA), 
         panel.grid.minor = element_line(colour = NA),
-        axis.title = element_text(size = 22),
-        axis.text = element_text(size = 20, colour = "black"),
-        plot.title = element_text(size = 16),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14, colour = "black"),
+        plot.title = element_text(size = 14),
         panel.background = element_rect(fill = NA),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
         plot.background = element_rect(colour = NA))
 theme_set(theme_new)
 
@@ -50,16 +55,32 @@ Anova(size_glmer)
 
 size_emm <- emmeans(size_glmer, ~ cover:worm_size, type = "response")
 
-size_pairs <- pairs(size_emm, by = "size")
+size_cld <- cld(size_emm, 
+                by = "worm_size", 
+                level = 0.95, 
+                alpha = 0.10,
+                Letters = letters)
+cld(size_emm, by = "cover", level = 0.95, Letters = letters)
 
-size_cld <- cld(size_emm, by = "worm_size", level = 0.05, Letters = letters)
-cld(size_emm, by = "cover", level = 0.05, Letters = letters)
+worm_pairs <-  as.data.frame(summary(pairs(size_emm, by = "worm_size"))) %>%
+  mutate(p.value = round(p.value, digits = 4))
 
-ggplot(as.data.frame(size_emm), aes(x = worm_size, y = rate, color = cover)) +
+
+(worm_graph <-
+  ggplot(as.data.frame(size_emm), aes(x = worm_size, y = rate, color = cover)) +
   geom_point(position = position_dodge(width = 0.5)) +
   geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), 
                 position = position_dodge(width = 0.5),
                 width = 0.25) +
-  geom_text(aes(x = worm_size, y = rate + 40), label = )
+  geom_text(data = worm_pairs, 
+            aes(x = worm_size, 
+                y = c(80, 160, 100)), 
+            label = paste("P = ", worm_pairs$p.value),
+            size = 4,
+            inherit.aes = FALSE) +
   labs(x = "Size Class", y = "Count") +
-  scale_color_manual(name = "Cover Crop", values = c("black", "gray"))
+  scale_color_manual(name = "Cover Crop", values = c("black", "gray")) +
+  scale_y_continuous(limits = c(0, 170))
+)
+
+cowplot::save_plot("worm_graph.png", worm_graph, base_height = 5, base_width = 8)
